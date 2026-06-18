@@ -142,7 +142,7 @@ pip install -r requirements.txt
 Start the FastAPI development server:
 
 ```bash
-uvicorn main:app --reload
+fastapi dev main.py
 ```
 
 Application URL:
