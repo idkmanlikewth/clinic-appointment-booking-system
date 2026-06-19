@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+
+{% block body %}
+
+<div class="hero-section">
+
+    <span class="hero-badge">
+        <i class="bi bi-shield-check"></i>
+        Trusted Clinic Network
+    </span>
+
+    <h1>Healthcare made <span>simple</span> &amp; fast</h1>
+
+    <p>
+        Find the right doctor, book an appointment in seconds, and manage
+        your visits — all in one place.
+    </p>
+
+    <div class="hero-cta">
+        <a href="/doctors" class="btn btn-gradient">
+            <i class="bi bi-search"></i> Find a Doctor
+        </a>
+        <a href="/appointments" class="btn btn-outline-soft">
+            <i class="bi bi-calendar-check"></i> Book Appointment
+        </a>
+    </div>
+
+</div>
+
+<div class="feature-grid">
+
+    <div class="feature-card">
+        <div class="feature-icon"><i class="bi bi-people"></i></div>
+        <h5>Browse Doctors</h5>
+        <p>Explore specialists across departments and pick the one that fits your needs.</p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon"><i class="bi bi-calendar2-plus"></i></div>
+        <h5>Book Instantly</h5>
+        <p>Pick a date and time that works for you — confirmed in seconds.</p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon"><i class="bi bi-clipboard2-pulse"></i></div>
+        <h5>Track Visits</h5>
+        <p>View all your upcoming and past appointments from your dashboard.</p>
+    </div>
+
+    <div class="feature-card">
+        <div class="feature-icon"><i class="bi bi-shield-lock"></i></div>
+        <h5>Secure &amp; Private</h5>
+        <p>Your account and appointment data are protected with JWT authentication.</p>
+    </div>
+
+</div>
+
+{% endblock %}

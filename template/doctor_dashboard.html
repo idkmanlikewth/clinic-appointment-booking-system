@@ -1,0 +1,139 @@
+{% extends "layout.html" %}
+
+{% block body %}
+
+<div class="page-header">
+    <span class="section-eyebrow">Doctor Portal</span>
+    <h2>My Dashboard</h2>
+    <p>View and manage appointments scheduled with you.</p>
+</div>
+
+<div id="auth-gate" class="auth-gate" style="display:none;">
+    <div class="gate-icon"><i class="bi bi-lock"></i></div>
+    <h5>Doctor access only</h5>
+    <p class="text-muted">Please log in with your doctor account to view this page.</p>
+    <a href="/login?role=doctor" class="btn btn-gradient">
+        <i class="bi bi-box-arrow-in-right"></i> Doctor Log In
+    </a>
+</div>
+
+<div id="dashboard-area" style="display:none;">
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-calendar-check"></i></div>
+            <div>
+                <div class="stat-value" id="stat-total">—</div>
+                <div class="stat-label">Total Appointments</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-pending"><i class="bi bi-hourglass-split"></i></div>
+            <div>
+                <div class="stat-value" id="stat-pending">—</div>
+                <div class="stat-label">Pending</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-upcoming"><i class="bi bi-calendar-event"></i></div>
+            <div>
+                <div class="stat-value" id="stat-upcoming">—</div>
+                <div class="stat-label">Upcoming</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="booking-card mt-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h5 class="mb-0"><i class="bi bi-journal-medical text-primary"></i> Patient Appointments</h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadAppointments()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+        <div id="appt-list">
+            <p class="text-muted">Loading...</p>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = getToken();
+const email = getUserEmail();
+const role = localStorage.getItem('user_role');
+
+if (!token || !email || role !== 'doctor') {
+    document.getElementById('auth-gate').style.display = 'block';
+} else {
+    document.getElementById('dashboard-area').style.display = 'block';
+    loadAppointments();
+}
+
+async function loadAppointments() {
+    const listEl = document.getElementById('appt-list');
+    listEl.innerHTML = '<p class="text-muted">Loading...</p>';
+
+    try {
+        const response = await fetch('/doctor/appointments', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        if (response.status === 401) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_role');
+            window.location.href = '/login?role=doctor';
+            return;
+        }
+
+        if (!response.ok) {
+            listEl.innerHTML = '<p class="text-muted">Could not load appointments.</p>';
+            return;
+        }
+
+        const appointments = await response.json();
+        const today = new Date().toISOString().split('T')[0];
+
+        document.getElementById('stat-total').textContent = appointments.length;
+        document.getElementById('stat-pending').textContent =
+            appointments.filter(a => (a.status || 'pending').toLowerCase() === 'pending').length;
+        document.getElementById('stat-upcoming').textContent =
+            appointments.filter(a => a.appointment_date >= today).length;
+
+        if (!appointments.length) {
+            listEl.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-calendar-x"></i></div>
+                    <h6>No appointments yet</h6>
+                    <p>Patients who book with you will appear here.</p>
+                </div>`;
+            return;
+        }
+
+        listEl.innerHTML = appointments.map(function(appt) {
+            const statusClass = 'status-' + (appt.status || 'pending').toLowerCase();
+            return `
+                <div class="appt-list-item">
+                    <div>
+                        <div class="appt-doctor">
+                            <i class="bi bi-person-fill text-primary"></i>
+                            Patient #${appt.user_id}
+                        </div>
+                        <div class="appt-meta">
+                            <i class="bi bi-calendar3"></i> ${appt.appointment_date}
+                            &nbsp;&middot;&nbsp;
+                            <i class="bi bi-clock"></i> ${appt.appointment_time}
+                        </div>
+                    </div>
+                    <span class="status-badge ${statusClass}">${appt.status || 'Pending'}</span>
+                </div>`;
+        }).join('');
+
+    } catch (err) {
+        listEl.innerHTML = '<p class="text-muted">Could not load appointments.</p>';
+    }
+}
+</script>
+{% endblock %}

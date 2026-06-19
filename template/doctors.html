@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+
+{% block body %}
+
+<div class="page-header">
+    <span class="section-eyebrow">Our Specialists</span>
+    <h2>Available Doctors</h2>
+    <p>Choose a doctor below and book an appointment in just a few clicks.</p>
+</div>
+
+{% if doctors %}
+
+<div class="row g-4">
+
+    {% for doctor in doctors %}
+
+    <div class="col-md-4">
+
+        <div class="card doctor-card">
+
+            <div class="card-body">
+
+                <div class="doctor-avatar">
+                    {{ doctor.username[0]|upper }}
+                </div>
+
+                <h4>Dr. {{ doctor.username }}</h4>
+
+                <span class="doctor-specialization">
+                    <i class="bi bi-heart-pulse"></i>
+                    {{ doctor.specialization }}
+                </span>
+
+                <a class="btn btn-gradient btn-book"
+                   href="/appointments?doctor_id={{ doctor.id }}">
+                    <i class="bi bi-calendar2-plus"></i>
+                    Book Appointment
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endfor %}
+
+</div>
+
+{% else %}
+
+<div class="empty-state">
+    <div class="empty-icon"><i class="bi bi-person-badge"></i></div>
+    <h5>No doctors available yet</h5>
+    <p>Check back soon — new doctors are added regularly.</p>
+</div>
+
+{% endif %}
+
+{% endblock %}

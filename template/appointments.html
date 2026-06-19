@@ -1,0 +1,280 @@
+{% extends "layout.html" %}
+
+{% block body %}
+
+<div class="page-header">
+    <span class="section-eyebrow">Appointments</span>
+    <h2>Book &amp; Manage Appointments</h2>
+    <p>Schedule a new visit or review the appointments you already have.</p>
+</div>
+
+<!-- Shown only when the visitor is not logged in -->
+<div id="auth-gate" class="auth-gate" style="display:none;">
+    <div class="gate-icon"><i class="bi bi-lock"></i></div>
+    <h5>Please log in to book an appointment</h5>
+    <p class="text-muted">You need an account to schedule and manage appointments.</p>
+    <a href="/login" class="btn btn-gradient">
+        <i class="bi bi-box-arrow-in-right"></i> Log In
+    </a>
+    <a href="/signup" class="btn btn-outline-soft ms-2">Create Account</a>
+</div>
+
+<!-- Shown only when the visitor is logged in -->
+<div id="booking-area" style="display:none;">
+
+    <div class="row g-4">
+
+        <div class="col-lg-5">
+
+            <div class="booking-card">
+
+                <h5 class="mb-3"><i class="bi bi-calendar2-plus text-primary"></i> New Appointment</h5>
+
+                <div id="booking-error" class="alert alert-danger" style="display:none;"></div>
+
+                {% if not doctors %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    No doctors are registered yet, so there's nothing to book.
+                    Register a doctor via <code>/doctor/signup</code> first.
+                </div>
+                {% endif %}
+
+                <form id="booking-form">
+
+                    <div class="mb-3">
+                        <label class="form-label">Doctor</label>
+
+                        <select id="doctor-select" name="doctor_id" class="form-control" required {% if not doctors %}disabled{% endif %}>
+                            <option value="" disabled selected>Choose a doctor</option>
+
+                            {% for doctor in doctors %}
+                            <option value="{{ doctor.id }}">
+                                Dr. {{ doctor.username }} — {{ doctor.specialization }}
+                            </option>
+                            {% endfor %}
+
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Date</label>
+                        <input type="date" id="appt-date" name="appointment_date"
+                               class="form-control" required {% if not doctors %}disabled{% endif %}>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Time</label>
+                        <input type="time" id="appt-time" name="appointment_time"
+                               class="form-control" required {% if not doctors %}disabled{% endif %}>
+                    </div>
+
+                    <button type="submit" class="btn btn-gradient w-100" {% if not doctors %}disabled{% endif %}>
+                        <i class="bi bi-check2-circle"></i> Confirm Booking
+                    </button>
+
+                </form>
+
+            </div>
+
+        </div>
+
+        <div class="col-lg-7">
+
+            <h5 class="mb-3"><i class="bi bi-journal-medical text-primary"></i> My Appointments</h5>
+
+            <div id="appt-list">
+                <!-- populated by JS -->
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script id="doctors-data" type="application/json">
+{{ doctors_json|safe }}
+</script>
+
+<script>
+
+const doctorsMap = {};
+JSON.parse(document.getElementById("doctors-data").textContent).forEach(function (d) {
+    doctorsMap[d.id] = d;
+});
+
+const userEmail = getUserEmail();
+const token = getToken();
+const authGate = document.getElementById("auth-gate");
+const bookingArea = document.getElementById("booking-area");
+
+if (!userEmail || !token) {
+    authGate.style.display = "block";
+} else {
+    bookingArea.style.display = "block";
+
+    // pre-select doctor from ?doctor_id= query param
+    const params = new URLSearchParams(window.location.search);
+    const preselect = params.get("doctor_id");
+    if (preselect) {
+        const select = document.getElementById("doctor-select");
+        if (select.querySelector('option[value="' + preselect + '"]')) {
+            select.value = preselect;
+        }
+    }
+
+    // sensible min date = today
+    document.getElementById("appt-date").min = new Date().toISOString().split("T")[0];
+
+    loadAppointments();
+}
+
+document.getElementById("booking-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const errorBox = document.getElementById("booking-error");
+    errorBox.style.display = "none";
+
+    const payload = {
+        doctor_id: parseInt(this.doctor_id.value, 10),
+        appointment_date: this.appointment_date.value,
+        appointment_time: this.appointment_time.value
+    };
+
+    try {
+        const response = await fetch("/appointments/book", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.status === 401) {
+            errorBox.textContent = "Your session has expired. Please log in again.";
+            errorBox.style.display = "block";
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("refresh_token");
+            setTimeout(function () {
+                window.location.href = "/login";
+            }, 1500);
+            return;
+        }
+
+        if (!response.ok) {
+            errorBox.textContent = data.detail || "Could not book appointment";
+            errorBox.style.display = "block";
+            return;
+        }
+
+        showToast("Appointment booked successfully", "success");
+        this.reset();
+        loadAppointments();
+
+    } catch (err) {
+        errorBox.textContent = "Something went wrong. Please try again.";
+        errorBox.style.display = "block";
+    }
+});
+
+async function loadAppointments() {
+    const listEl = document.getElementById("appt-list");
+    listEl.innerHTML = '<p class="text-muted">Loading...</p>';
+
+    try {
+        const response = await fetch("/appointments/my", {
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (response.status === 401) {
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("refresh_token");
+            document.getElementById("booking-area").style.display = "none";
+            document.getElementById("auth-gate").style.display = "block";
+            return;
+        }
+
+        if (!response.ok) {
+            listEl.innerHTML = '<p class="text-muted">Could not load appointments.</p>';
+            return;
+        }
+
+        const appointments = await response.json();
+
+        if (!appointments.length) {
+            listEl.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-calendar-x"></i></div>
+                    <h6>No appointments yet</h6>
+                    <p>Book one using the form on the left.</p>
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = appointments.map(renderAppointment).join("");
+
+        listEl.querySelectorAll(".btn-cancel-appt").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                cancelAppointment(btn.dataset.id);
+            });
+        });
+
+    } catch (err) {
+        listEl.innerHTML = '<p class="text-muted">Could not load appointments.</p>';
+    }
+}
+
+function renderAppointment(appt) {
+    const doctor = doctorsMap[appt.doctor_id];
+    const doctorName = doctor ? ("Dr. " + doctor.username + " — " + doctor.specialization) : "Doctor";
+    const statusClass = "status-" + (appt.status || "pending").toLowerCase();
+
+    return `
+        <div class="appt-list-item">
+            <div>
+                <div class="appt-doctor">${doctorName}</div>
+                <div class="appt-meta">
+                    <i class="bi bi-calendar3"></i> ${appt.appointment_date}
+                    &nbsp;&middot;&nbsp;
+                    <i class="bi bi-clock"></i> ${appt.appointment_time}
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="status-badge ${statusClass}">${appt.status || "Pending"}</span>
+                <button class="btn-cancel-appt" data-id="${appt.id}">Cancel</button>
+            </div>
+        </div>
+    `;
+}
+
+async function cancelAppointment(id) {
+    try {
+        const response = await fetch("/appointments/" + id, {
+            method: "DELETE",
+            headers: { "Authorization": "Bearer " + token }
+        });
+
+        if (!response.ok) {
+            showToast("Could not cancel appointment", "error");
+            return;
+        }
+
+        showToast("Appointment cancelled", "success");
+        loadAppointments();
+
+    } catch (err) {
+        showToast("Could not cancel appointment", "error");
+    }
+}
+
+</script>
+
+{% endblock %}

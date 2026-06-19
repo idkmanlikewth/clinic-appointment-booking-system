@@ -1,6 +1,6 @@
 
 from jose import jwt
-from passlib.context import CryptContext
+import bcrypt
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
@@ -11,28 +11,40 @@ REFRESH_SECRET_KEY = "myrefreshsecret123"
 
 ALGORITHM = "HS256"
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
-
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/user/login"
 )
 
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+
+    # bcrypt only supports secrets up to 72 bytes; truncate safely
+    # instead of letting the bcrypt library raise a ValueError.
+    password_bytes = password.encode("utf-8")[:72]
+
+    hashed = bcrypt.hashpw(
+        password_bytes,
+        bcrypt.gensalt()
+    )
+
+    return hashed.decode("utf-8")
 
 
 def verify_password(
     plain_password,
     hashed_password
 ):
-    return pwd_context.verify(
-        plain_password,
-        hashed_password
-    )
+    try:
+        plain_bytes = plain_password.encode("utf-8")[:72]
+        hashed_bytes = hashed_password.encode("utf-8")
+
+        return bcrypt.checkpw(
+            plain_bytes,
+            hashed_bytes
+        )
+
+    except ValueError:
+        return False
 
 
 def create_access_token(subject):
